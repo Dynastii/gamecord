@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState,useRef } from 'react'
 import './ChatSearchBar.scss'
 import firebase from 'firebase/app'
 import AddCircleOutlineIcon from '@material-ui/icons/AddCircleOutline';
@@ -6,13 +6,22 @@ import CardGiftcardIcon from '@material-ui/icons/CardGiftcard';
 import GifIcon from '@material-ui/icons/Gif';
 import InsertEmoticonIcon from '@material-ui/icons/InsertEmoticon';
 import { IconButton,makeStyles } from '@material-ui/core';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { auth, firestore } from '../../firebase/firebase';
-const useStyles=makeStyles((theme)=>{
+// import { Picker } from 'emoji-mart'
+// import 'emoji-mart/css/emoji-mart.css'
+import FileUpload from '../FileUpload/FileUpload'
+import openupload from '../../redux/openupload/message.actions'
+// import OutsideClick from '../OutsideClick/OutsideClick'
+import Emojicontainer from '../Emoji/Emojicontainer'
+import replytoggle from '../../redux/replytoggle/replytoggle.actions'
+import ChatSearchReply from './ChatSearchReply'
+import { useCollectionData } from 'react-firebase-hooks/firestore';
+const useStyles=makeStyles(()=>{
     return{
         button:{
             color: '#b8bbc0',
-            padding:'1.25rem .75rem'
+            padding:'0 .75rem'
         },
         addbutton:{
             backgroundColor:'#40454b',
@@ -25,36 +34,86 @@ const useStyles=makeStyles((theme)=>{
     }
 })
 function ChatSearchBar() {
+    const dispatch = useDispatch()
     const classes=useStyles();
+    const [openpicker,setopenpicker]=useState(false);
     const [formValue,setformValue]=useState('');
+    const currentserverid=useSelector((state)=>state.currentserver.id)
     const id= useSelector((state)=>state.doc.id)
-    const channelRef= firestore.collection('channels').doc(id).collection('messages');
-    const handleSubmit=(e)=>{
+    const channelRef=firestore.collection('servers').doc(currentserverid).collection('channels').doc(id).collection('messages');
+    const replymsg= useSelector((state)=>state.reply);
+    const togglereply=useSelector((state)=>state.replytoggle.clicked);
+    const currentdoc=useSelector((state)=>state.doc.name);
+    const query=channelRef.orderBy('createdAt','desc').limit(1);
+    const [messages]=useCollectionData(query,{idField:'id'});
+    const handleSubmit=async(e)=>{
         e.preventDefault();
-        channelRef.add({
-            message:formValue,
-            sendername:auth.currentUser.displayName,
-            senderemail:auth.currentUser.email,
-            senderuid:auth.currentUser.uid,
-            createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-        })
+        if(currentdoc==='roles'){
+            setformValue('Not authorized to send message here');
+            return
+        }
+        if(!togglereply){
+            if(messages[0].senderemail===auth.currentUser.email){
+                const messageRef=channelRef.doc(messages[0].id);
+                await messageRef.update({
+                    message:messages[0].message+'\\n'+formValue
+                },{merge:true})
+            }
+            else{
+                await channelRef.add({
+                    message:formValue,
+                    sendername:auth.currentUser.displayName,
+                    senderemail:auth.currentUser.email,
+                    senderuid:auth.currentUser.uid,
+                    senderphoto:auth.currentUser.photoURL,
+                    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+                })
+            }
+            
+        }
+        else{
+            await channelRef.add({
+                message:formValue,
+                sendername:auth.currentUser.displayName,
+                senderemail:auth.currentUser.email,
+                senderuid:auth.currentUser.uid,
+                senderphoto:auth.currentUser.photoURL,
+                createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+                reply:replymsg
+            })
+            dispatch(replytoggle());
+        }
         setformValue('');
     }
+    const handleselect=(emoj)=>{
+        setformValue(()=>{
+           return formValue+emoj.native
+        })
+        
+    }
+    const handlePicker=()=>{
+        setopenpicker(!openpicker)
+    }
+    const handleadd=()=>{
+        dispatch(openupload());
+    }
+    
     return (
-        <div>
+        <div style={{position:'relative'}}>
+           {useSelector((state)=>state.replytoggle.clicked)&&<ChatSearchReply/>}
             <div className="chatsearchbar">
                 <div className="chatsearchbar__addicon">
-                    <IconButton className={classes.addbutton} aria-label="settings">
-                        <AddCircleOutlineIcon fontSize='large'/>
+                    <IconButton className={classes.addbutton} onClick={handleadd} aria-label="settings">
+                        <AddCircleOutlineIcon fontSize='large' />
                     </IconButton>
                 </div>
                 <div className="chatsearchbar__input">
                     <form onSubmit={handleSubmit}>
-                     <input value={formValue} required onChange={(e)=>{setformValue(e.target.value)}} className='chatsearchbar__input-text' placeholder='Message #code-runner' type="text"/>
+                     <input autoFocus id="myTextField" value={formValue} required onChange={(e)=>{setformValue(e.target.value)}} className='chatsearchbar__input-text' placeholder={`Message #${useSelector((state)=>state.doc.name)}`} type="text"/>
                     </form>
                 </div>
                 <div className="chatsearchbar__gifticon">
-                    <IconButton className={classes.button} aria-label="settings">
+                    <IconButton className={classes.button} aria-label="settings" >
                         <CardGiftcardIcon style={{ fontSize: 30 }}/>
                     </IconButton>
                 </div>
@@ -63,12 +122,16 @@ function ChatSearchBar() {
                         <GifIcon style={{ fontSize: 30 }}/>
                     </IconButton>
                 </div>
+                
                 <div className="chatsearchbar__emojiicon">
-                    <IconButton className={classes.button} aria-label="settings">
+                    <IconButton className={classes.button} onClick={handlePicker} aria-label="settings">
                         <InsertEmoticonIcon style={{ fontSize: 30 }}/>
                     </IconButton>
                 </div>
             </div>
+         {/* {openpicker&& <div ref={ref} className='emojipicker'><Picker  onSelect={handleselect} /></div>} */}
+         {openpicker&& <div className='emojipicker'><Emojicontainer/></div>}
+        {useSelector((state)=>state.open.open) && <div className='upload'><FileUpload/></div>}
         </div>
     )
 }

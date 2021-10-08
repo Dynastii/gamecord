@@ -5,7 +5,7 @@ import ScreenShareIcon from '@material-ui/icons/ScreenShare';
 import CallEndIcon from '@material-ui/icons/CallEnd';
 import {IconButton,makeStyles, Button} from '@material-ui/core'
 import './Sidebarvoice.scss'
-const useStyles=makeStyles((theme)=>{
+const useStyles=makeStyles(()=>{
     return{
         signal:{
             color:"#43b380"
@@ -17,7 +17,7 @@ const useStyles=makeStyles((theme)=>{
             fontSize:'14px',
             color:'#fff',
             backgroundColor:'#363940',
-            padding:'5px 20px',
+            padding:'5px 1.9rem',
             textTransform:'none'
         }
     }
